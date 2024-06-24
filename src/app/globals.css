@@ -25,3 +25,11 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+
+.box-shadow-container {
+  box-shadow: 0 0 0 max(100vh, 100vw) rgba(0, 0, 0, 0.5);
+}
+
+.aspect-ratio {
+  aspect-ratio: 9/16;
+}
