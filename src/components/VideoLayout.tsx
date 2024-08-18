@@ -20,6 +20,7 @@ export default function VideoLayout({
   setting: ISetting;
   setSettings: any;
 }) {
+  const [blurred, setBlurred] = useState(true);
   const [cropCoordinate, setCropCoordinate] = useState({
     width: 200,
     height: 200,
@@ -122,7 +123,7 @@ export default function VideoLayout({
           options: {
             start: setting.options.start,
             end: setting.options.end,
-            blurredBackground: false,
+            blurredBackground: blurred,
             resolution: 1080,
             //   captions: [
             //     {
@@ -292,6 +293,9 @@ export default function VideoLayout({
             </Rnd>
           </div>
         </div>
+        <button className="block" onClick={() => setBlurred(!blurred)}>
+          Blurred: {`${blurred}`}
+        </button>
         <button onClick={createVideo}>next</button>
       </div>
     </div>
