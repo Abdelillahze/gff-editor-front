@@ -1,6 +1,7 @@
 "use client";
 import axios from "axios";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
+import { Rnd } from "react-rnd";
 
 interface ISetting {
   page: string;
@@ -19,17 +20,101 @@ export default function VideoLayout({
   setting: ISetting;
   setSettings: any;
 }) {
-  const isDown = useRef(false);
-  const coordinate = useRef({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
-  const parentRef = useRef<HTMLDivElement>(null);
+  const [cropCoordinate, setCropCoordinate] = useState({
+    width: 200,
+    height: 200,
+    x: 0,
+    y: 0,
+  });
+  const [frameCoordinate, setFrameCoordinate] = useState({
+    width: 230,
+    height: 300,
+    x: 0,
+    y: 0,
+  });
+  const cropRef = useRef<any>(null);
+  const cropParentRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<any>(null);
+  const frameParentRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const blurredCanvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!canvas || !video) return;
+    const ctx = canvas.getContext("2d")!;
+    let animation;
+    const {
+      x: cropX,
+      y: cropY,
+      width: cropWidth,
+      height: cropHeight,
+    } = cropCoordinate;
+    const originalWidth = video.videoWidth;
+    const originalHeight = video.videoHeight;
+    const width = (originalWidth * cropWidth) / video.offsetWidth;
+    const height = (originalHeight * cropHeight) / video.offsetHeight;
+    const x = (originalWidth * cropX) / video.offsetWidth;
+    const y = (originalHeight * cropY) / video.offsetHeight;
+    let frameWidth = cropWidth;
+    let frameHeight = cropHeight;
+    let offsetX = 0;
+    let offsetY = 0;
+    const aspectRatio = cropWidth / cropHeight;
+
+    canvas.width = frameCoordinate.width;
+    canvas.height = frameCoordinate.height;
+
+    if (canvas.width > frameWidth) {
+      console.log("width");
+      frameWidth = canvas.width;
+      frameHeight = canvas.width / aspectRatio;
+      if (canvas.height > frameHeight) {
+        frameWidth = canvas.height * aspectRatio;
+        frameHeight = canvas.height;
+      }
+    } else if (canvas.height > frameHeight) {
+      console.log("height");
+      frameWidth = canvas.height * aspectRatio;
+      frameHeight = canvas.height;
+    }
+
+    if (frameWidth > canvas.width) {
+      offsetX = (frameWidth - canvas.width) / 2;
+    }
+    if (frameHeight > canvas.height) {
+      offsetY = (frameHeight - canvas.height) / 2;
+    }
+
+    const cropVideo = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.drawImage(
+        video,
+        x,
+        y,
+        width,
+        height,
+        -offsetX,
+        -offsetY,
+        frameWidth,
+        frameHeight
+      );
+
+      animation = requestAnimationFrame(cropVideo);
+    };
+
+    cropVideo();
+    return () => {
+      cancelAnimationFrame(animation!);
+    };
+  }, [frameCoordinate, cropCoordinate]);
 
   const createVideo = async () => {
+    console.log(cropCoordinate, frameCoordinate, cropRef, frameRef);
     try {
-      const parent = parentRef.current?.getBoundingClientRect()!;
-      const container = containerRef.current?.getBoundingClientRect()!;
-      const containerStyle = window.getComputedStyle(containerRef.current!);
-
       const res = await axios.post(
         process.env.NEXT_PUBLIC_SERVER_URL + "/clip",
         {
@@ -37,7 +122,7 @@ export default function VideoLayout({
           options: {
             start: setting.options.start,
             end: setting.options.end,
-            blurredBackground: true,
+            blurredBackground: false,
             resolution: 1080,
             //   captions: [
             //     {
@@ -56,18 +141,20 @@ export default function VideoLayout({
               {
                 label: "content",
                 frame: {
-                  width: 1080,
-                  height: 1920,
-                  x: 0,
-                  y: 0,
+                  ParentWidth: frameParentRef.current?.offsetWidth,
+                  ParentHeight: frameParentRef.current?.offsetHeight,
+                  width: frameCoordinate.width,
+                  height: frameCoordinate.height,
+                  x: frameCoordinate.x,
+                  y: frameCoordinate.y,
                 },
                 crop: {
-                  ParentWidth: parent.width,
-                  ParentHeight: parent.height,
-                  width: container.width,
-                  height: container.height,
-                  x: containerStyle.getPropertyValue("left").split("px")[0],
-                  y: 0,
+                  ParentWidth: cropParentRef.current?.offsetWidth,
+                  ParentHeight: cropParentRef.current?.offsetHeight,
+                  width: cropCoordinate.width,
+                  height: cropCoordinate.height,
+                  x: cropCoordinate.x,
+                  y: cropCoordinate.y,
                 },
               },
             ],
@@ -81,80 +168,129 @@ export default function VideoLayout({
     }
   };
 
+  // const onResizeHandler = () => {
+  //   if (!cropRef.current || !cropParentRef.current || !canvasRef.current)
+  //     return;
+
+  //   const crop = cropRef.current.resizableElement.current;
+  //   const cropParent = cropParentRef.current;
+
+  //   const width =
+  //     (frameCoordinate.width * cropCoordinate.width) / cropParent.offsetWidth;
+  //   const height =
+  //     (frameCoordinate.height * cropCoordinate.height) /
+  //     cropParent.offsetHeight;
+
+  //   console.log(cropCoordinate);
+
+  //   setCanvasCoordinate({ ...canvasCoordinate, width, height });
+  // };
+
+  // const onDragHandler = () => {
+  //   if (!cropRef.current || !canvasRef.current || !cropParentRef.current)
+  //     return;
+
+  //   const crop = window.getComputedStyle(
+  //     cropRef.current.resizableElement.current
+  //   );
+  //   const cropParent = cropParentRef.current;
+  //   const [cropLeft, cropTop] = crop.transform
+  //     .split(", ")
+  //     .slice(4)
+  //     .map((num) => parseFloat(num));
+
+  //   const top = (frameCoordinate.height * cropTop) / cropParent.offsetHeight;
+  //   const left = (frameCoordinate.width * cropLeft) / cropParent.offsetWidth;
+
+  //   setCanvasCoordinate({ ...canvasCoordinate, x: left, y: top });
+  // };
+
   return (
     <div className="w-full min-h-screen text-black">
       <div className="w-full">
         <h1>Layout</h1>
-        <div
-          ref={parentRef}
-          onMouseUp={() => {
-            //   console.log("up", isDown.current);
-            isDown.current = false;
-          }}
-          onMouseMove={(e) => {
-            e.preventDefault();
-            const parent = e.currentTarget;
-            const Elem = containerRef.current;
-            if (!Elem) return;
-            if (isDown.current) {
-              const parentRect = parent.getBoundingClientRect();
-              const containerRect = Elem.getBoundingClientRect();
-              const parentToCursor = e.clientX - parentRect.left;
-              const ElemToCursor = coordinate.current.x;
-              const left = parentToCursor - ElemToCursor;
-              const rest = containerRect.width - left + ElemToCursor;
-              console.log(
-                parentRect.width,
-                containerRect.width,
-                parentToCursor,
-                ElemToCursor,
-                left,
-                rest,
-                coordinate.current
-              );
-              console.log(left);
-              if (
-                left > -5 &&
-                left < parentRect.width - containerRect.width + 5
-              ) {
-                Elem.style.left = `${left}px`;
-              }
-            }
-          }}
-          className="relative w-2/3 overflow-hidden"
-        >
+        <div className="flex gap-2">
           <div
-            ref={containerRef}
-            draggable={false}
-            onMouseDown={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              isDown.current = true;
-              coordinate.current = {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
-              };
-            }}
-            className="z-10 border-2 border-dashed border-white opacity-50 absolute inset-0 h-full aspect-ratio box-shadow-container"
-          ></div>
-          <video
-            className="w-full"
-            autoPlay
-            muted
-            loop
-            onTimeUpdate={(e) => {
-              const videoElement = e.currentTarget;
-              const start = setting.options.start;
-              const end = setting.options.end;
-              if (videoElement.currentTime > end) {
-                videoElement.currentTime = start;
-              }
-            }}
+            ref={cropParentRef}
+            className="relative w-2/3 h-fit overflow-hidden"
           >
-            <source
-              src={setting.options.source + `#t=${setting.options.start}`}
-              type="video/mp4"
-            ></source>
-          </video>
+            <Rnd
+              ref={cropRef}
+              className="border-2 border-dashed border-white z-50 box-shadow-container"
+              size={{
+                width: cropCoordinate.width,
+                height: cropCoordinate.height,
+              }}
+              position={{ x: cropCoordinate.x, y: cropCoordinate.y }}
+              onDrag={(e, d) => {
+                setCropCoordinate({ ...cropCoordinate, x: d.x, y: d.y });
+                // onDragHandler();
+              }}
+              onResize={(e, direction, ref, delta, position) => {
+                setCropCoordinate({
+                  width: parseInt(ref.style.width),
+                  height: parseInt(ref.style.height),
+                  ...position,
+                });
+                // onResizeHandler();
+              }}
+              bounds={"parent"}
+            ></Rnd>
+            <video
+              ref={videoRef}
+              controls
+              className="w-full"
+              autoPlay
+              muted
+              loop
+              onTimeUpdate={(e) => {
+                const videoElement = e.currentTarget;
+                const start = setting.options.start;
+                const end = setting.options.end;
+                if (videoElement.currentTime > end) {
+                  videoElement.currentTime = start;
+                }
+              }}
+            >
+              <source
+                src={setting.options.source + `#t=${setting.options.start}`}
+                type="video/mp4"
+              ></source>
+            </video>
+          </div>
+          <div
+            ref={frameParentRef}
+            className="relative w-1/4 bg-black aspect-ratio overflow-hidden"
+          >
+            <canvas
+              className="absolute top-0 left-0"
+              ref={blurredCanvasRef}
+            ></canvas>
+            <Rnd
+              ref={frameRef}
+              bounds={"parent"}
+              className="relative border border-white z-50 box-shadow-container overflow-hidden"
+              size={{
+                width: frameCoordinate.width,
+                height: frameCoordinate.height,
+              }}
+              position={{ x: frameCoordinate.x, y: frameCoordinate.y }}
+              onDrag={(e, d) => {
+                setFrameCoordinate({ ...frameCoordinate, x: d.x, y: d.y });
+                // onDragHandler();
+              }}
+              onResize={(e, direction, ref, delta, position) => {
+                setFrameCoordinate({
+                  width: parseInt(ref.style.width),
+                  height: parseInt(ref.style.height),
+                  ...position,
+                });
+                // onResizeHandler();
+              }}
+            >
+              <canvas ref={canvasRef}></canvas>
+            </Rnd>
+          </div>
         </div>
         <button onClick={createVideo}>next</button>
       </div>
